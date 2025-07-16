@@ -1,3 +1,4 @@
+import json
 import random
 import string
 
@@ -99,10 +100,10 @@ async def claim_domain(
         pipe = redis_domains.pipeline()
 
         pipe.set(domain_key, user_id)
-        pipe.sadd(user_domains_set_key, {
+        pipe.sadd(user_domains_set_key, json.dumps({
             "domain": domain_name,
             "verified": True
-        })
+        }))
 
         pipe.execute()
 
