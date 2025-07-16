@@ -1,0 +1,86 @@
+# minutemail-domain-api Kubernetes deployment and ingress YAML
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: minutemail-domain-api
+  labels:
+    app: minutemail-domain-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: minutemail-domain-api
+  template:
+    metadata:
+      labels:
+        app: minutemail-domain-api
+    spec:
+      imagePullSecrets:
+        - name: dockerhub-secret
+      containers:
+        - name: minutemail-domain-api
+          image: chrptvn/minutemail-domain-api:1.0.0
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
+          env:
+            - name: REDIS_HOST
+              value: "redis-master.minutemail.svc.cluster.local"
+            - name: REDIS_PORT
+              value: "6379"
+            - name: REDIS_DB
+              value: "2"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: minutemail-domain-api
+spec:
+  type: ClusterIP
+  selector:
+    app: minutemail-domain-api
+  ports:
+    - port: 80
+      targetPort: 8080
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: minutemail-domain-api-ingress
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "http://localhost:4200"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, DELETE, OPTIONS"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "*"
+    nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      more_set_headers "Access-Control-Allow-Origin: $upstream_http_access_control_allow_origin";
+      more_set_headers "Access-Control-Allow-Methods: $upstream_http_access_control_allow_methods";
+      more_set_headers "Access-Control-Allow-Headers: $upstream_http_access_control_allow_headers";
+      more_set_headers "Access-Control-Allow-Credentials: $upstream_http_access_control_allow_credentials";
+
+spec:
+  ingressClassName: nginx
+
+  tls:
+    - hosts:
+        - minutemail.co
+      secretName: api-minutemail-tls
+
+  rules:
+    - host: minutemail.co
+      http:
+        paths:
+          - path: /api/v1/domains
+            pathType: Prefix
+            backend:
+              service:
+                name: minutemail-domain-api
+                port:
+                  number: 8080
