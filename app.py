@@ -122,8 +122,7 @@ async def claim_domain(
 
         pipe.set(domain_key, user_id)
         pipe.sadd(user_domains_set_key, json.dumps({
-            "domain": domain_name,
-            "verified": True
+            "domain": domain_name
         }))
 
         pipe.execute()
