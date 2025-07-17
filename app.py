@@ -76,7 +76,7 @@ def get_claims(auth_header: str) -> dict:
 @app.get("/v1/domains/verify", summary="Verify a claimed domain")
 async def verify_domain(domain: str):
     domain_name = domain.lower()
-    valid_mx_records = ['smtp1.minutemail.co']
+    valid_mx_records = ['smtp1.minutemail.co.']
 
     try:
         records = dns.resolver.resolve(domain_name, 'MX')
