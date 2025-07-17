@@ -1,18 +1,15 @@
 import json
-import random
-import string
 
 import requests
-from fastapi import FastAPI, HTTPException, Header, Depends, status
+from fastapi import FastAPI, HTTPException, Header, status
 import redis
 import os
-from typing import Dict, Optional, List
+from typing import List
 from pydantic import BaseModel
-import umami
 from jose import jwt, JWTError
 
 
-class DomainClaim(BaseModel):
+class ClaimedDomain(BaseModel):
     domain: str
 
 
@@ -79,7 +76,7 @@ def get_claims(auth_header: str) -> dict:
 
 @app.post("/v1/domains", summary="Claim a new domain")
 async def claim_domain(
-    req: DomainClaim,
+    req: ClaimedDomain,
     auth_header: str = Header(None, alias="Authorization")
 ):
     user_id = await get_user_id(auth_header)
@@ -115,7 +112,7 @@ async def claim_domain(
         )
 
 
-@app.get("/v1/domains", response_model=List[str], summary="Fetch all domains claimed by the current user")
+@app.get("/v1/domains", response_model=List[ClaimedDomain], summary="Fetch all domains claimed by the current user")
 async def fetch_domains(
     auth_header: str = Header(None, alias="Authorization")
 ):
@@ -124,11 +121,22 @@ async def fetch_domains(
 
     try:
         claimed_domains = redis_domains.smembers(user_domains_set_key)
-        return list(claimed_domains)
+        return [json.loads(d) for d in claimed_domains]
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to fetch domains due to an internal error: {e}"
+        )
+
+@app.delete("/v1/domains/drop")
+async def delete_all_domains():
+    try:
+        await redis_domains.flushdb()
+        return {"message": "All domains deleted successfully."}
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete domains due to an internal error: {e}"
         )
 
 
