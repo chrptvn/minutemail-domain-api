@@ -145,9 +145,7 @@ async def fetch_domains(
 @app.delete("/v1/domains/drop")
 async def delete_all_domains():
     try:
-        keys = []
-        async for key in redis_domains.scan_iter("*"):
-            keys.append(key)
+        keys = [key async for key in redis_domains.scan_iter("*")]
         if keys:
             await redis_domains.delete(*keys)
         return {"message": "All domains deleted successfully."}
@@ -156,6 +154,7 @@ async def delete_all_domains():
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to delete domains due to an internal error: {e}"
         )
+
 
 
 @app.delete("/v1/domains/{domain_name}", summary="Delete a claimed domain")
