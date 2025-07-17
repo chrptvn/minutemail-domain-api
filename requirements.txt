@@ -5,3 +5,4 @@ httpx
 umami-analytics
 python-jose[cryptography]
 requests
+dnspython
