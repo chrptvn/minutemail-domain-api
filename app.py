@@ -76,7 +76,7 @@ def get_claims(auth_header: str) -> dict:
 @app.get("/v1/domains/verify", summary="Verify a claimed domain")
 def verify_domain(domain: str):
     domain_name = domain.lower()
-    valid_mx_records = ['smtp1.minutemail.co']
+    valid_mx_records = ['mail.minutemail.co', 'smtp1.minutemail.co']
 
     try:
         records = dns.resolver.resolve(domain_name, 'MX')
@@ -85,7 +85,7 @@ def verify_domain(domain: str):
         return {"valid": all(mx in valid_mx_records for mx in mx_hosts), "mx_records": mx_hosts}
     except Exception as e:
         print(f"Failed to get MX records for {domain_name}: {e}")
-        return {"valid": "false", "error": str(e) if str(e) else "Failed to resolve MX records"}
+        return {"valid": False, "error": str(e) if str(e) else "Failed to resolve MX records"}
 
 
 @app.post("/v1/domains", summary="Claim a new domain")
@@ -95,8 +95,8 @@ async def claim_domain(
 ):
     user_id = await get_user_id(auth_header)
     domain_name = req.domain.lower()
-    is_valid = await verify_domain(domain_name)
-    if not is_valid:
+
+    if not verify_domain(domain_name)["valid"]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Domain '{domain_name}' is not valid or does not have the required MX records."
