@@ -73,19 +73,18 @@ def get_claims(auth_header: str) -> dict:
 
     return claims
 
-@app.post("/v1/domains/verify", summary="Verify a claimed domain")
-async def claim_domain(
-    req: ClaimedDomain
-):
-    domain_name = req.domain.lower()
+@app.get("/v1/domains/verify", summary="Verify a claimed domain")
+async def verify_domain(domain: str):
+    domain_name = domain.lower()
+    valid_mx_records = ['smtp1.minutemail.co']
 
     try:
-        answers = dns.resolver.resolve(domain_name, 'MX')
-        return sorted([(r.preference, r.exchange.to_text()) for r in answers])
+        records = dns.resolver.resolve(domain_name, 'MX')
+        mx_hosts = [r.exchange.to_text(omit_final_dot=True).lower() for r in records]
+        return all(mx in valid_mx_records for mx in mx_hosts)
     except Exception as e:
         print(f"Failed to get MX records for {domain_name}: {e}")
-        return []
-
+        return False
 
 
 @app.post("/v1/domains", summary="Claim a new domain")
@@ -95,6 +94,12 @@ async def claim_domain(
 ):
     user_id = await get_user_id(auth_header)
     domain_name = req.domain.lower()
+    is_valid = await verify_domain(domain_name)
+    if not is_valid:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Domain '{domain_name}' is not valid or does not have the required MX records."
+        )
 
     domain_key = f"domain:{domain_name}"
     user_domains_set_key = f"user:{user_id}:domains"
@@ -141,20 +146,6 @@ async def fetch_domains(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to fetch domains due to an internal error: {e}"
         )
-
-@app.delete("/v1/domains/drop")
-def delete_all_domains():
-    try:
-        keys = [key for key in redis_domains.scan_iter("*")]
-        if keys:
-            redis_domains.delete(*keys)
-        return {"message": "All domains deleted successfully."}
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to delete domains due to an internal error: {e}"
-        )
-
 
 
 @app.delete("/v1/domains/{domain_name}", summary="Delete a claimed domain")
