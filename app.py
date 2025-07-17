@@ -7,7 +7,7 @@ import os
 from typing import List
 from pydantic import BaseModel
 from jose import jwt, JWTError
-
+import dns.resolver
 
 class ClaimedDomain(BaseModel):
     domain: str
@@ -73,6 +73,20 @@ def get_claims(auth_header: str) -> dict:
 
     return claims
 
+@app.post("/v1/domains/verify", summary="Verify a claimed domain")
+async def claim_domain(
+    req: ClaimedDomain
+):
+    domain_name = req.domain.lower()
+
+    try:
+        answers = dns.resolver.resolve(domain_name, 'MX')
+        return sorted([(r.preference, r.exchange.to_text()) for r in answers])
+    except Exception as e:
+        print(f"Failed to get MX records for {domain_name}: {e}")
+        return []
+
+
 
 @app.post("/v1/domains", summary="Claim a new domain")
 async def claim_domain(
@@ -131,7 +145,11 @@ async def fetch_domains(
 @app.delete("/v1/domains/drop")
 async def delete_all_domains():
     try:
-        await redis_domains.flushdb()
+        keys = []
+        async for key in redis_domains.scan_iter("*"):
+            keys.append(key)
+        if keys:
+            await redis_domains.delete(*keys)
         return {"message": "All domains deleted successfully."}
     except Exception as e:
         raise HTTPException(
