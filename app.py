@@ -82,7 +82,7 @@ def verify_domain(domain: str):
         records = dns.resolver.resolve(domain_name, 'MX')
         mx_hosts = [r.exchange.to_text(omit_final_dot=True).lower() for r in records]
 
-        return {"valid": all(mx in valid_mx_records for mx in mx_hosts)}
+        return {"valid": all(mx in valid_mx_records for mx in mx_hosts), "mx_records": mx_hosts}
     except Exception as e:
         print(f"Failed to get MX records for {domain_name}: {e}")
         return {"valid": "false", "error": str(e) if str(e) else "Failed to resolve MX records"}
