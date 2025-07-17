@@ -18,7 +18,7 @@ app = FastAPI()
 redis_host = os.getenv("REDIS_HOST", "127.0.0.1")
 file_service_url = os.getenv("FILE_SERVICE_URL", "http://tempfile-servlet.minutemail.svc.cluster.local:8080")
 redis_port = int(os.getenv("REDIS_PORT", "6379"))
-redis_db_domains = int(os.getenv("REDIS_DB", "2"))
+redis_db = int(os.getenv("REDIS_DB", "2"))
 
 KEYCLOAK_URL = "https://keycloak.minutemail.co"
 REALM = "minutemail"
@@ -26,7 +26,7 @@ AUDIENCE = "account"
 JWKS_URL = f"{KEYCLOAK_URL}/realms/{REALM}/protocol/openid-connect/certs"
 ISSUER = f"{KEYCLOAK_URL}/realms/{REALM}"
 
-redis_domains = redis.Redis(host=redis_host, port=redis_port, db=redis_db_domains, decode_responses=True)
+redis_domains = redis.Redis(host=redis_host, port=redis_port, db=redis_db, decode_responses=True)
 
 async def get_user_id(auth_header):
     if not auth_header or not auth_header.startswith("Bearer "):
@@ -74,9 +74,13 @@ def get_claims(auth_header: str) -> dict:
     return claims
 
 @app.get("/v1/domains/verify", summary="Verify a claimed domain")
-def verify_domain(domain: str):
+def verify_domain(
+    domain: str,
+    auth_header: str = Header(None, alias="Authorization")
+):
     domain_name = domain.lower()
     valid_mx_records = ['mail.minutemail.co', 'smtp1.minutemail.co']
+    get_claims(auth_header)
 
     try:
         records = dns.resolver.resolve(domain_name, 'MX')
@@ -96,7 +100,7 @@ async def claim_domain(
     user_id = await get_user_id(auth_header)
     domain_name = req.domain.lower()
 
-    if not verify_domain(domain_name)["valid"]:
+    if not verify_domain(domain_name, auth_header)["valid"]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Domain '{domain_name}' is not valid or does not have the required MX records."
