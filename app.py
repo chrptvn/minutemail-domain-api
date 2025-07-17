@@ -75,20 +75,17 @@ def get_claims(auth_header: str) -> dict:
 
 @app.get("/v1/domains/verify", summary="Verify a claimed domain")
 def verify_domain(domain: str):
-    print(domain)
     domain_name = domain.lower()
     valid_mx_records = ['smtp1.minutemail.co']
 
     try:
         records = dns.resolver.resolve(domain_name, 'MX')
         mx_hosts = [r.exchange.to_text(omit_final_dot=True).lower() for r in records]
-        for mx in mx_hosts:
-            print(f"Found MX record: {mx}")
 
-        return all(mx in valid_mx_records for mx in mx_hosts)
+        return {"valid": all(mx in valid_mx_records for mx in mx_hosts)}
     except Exception as e:
         print(f"Failed to get MX records for {domain_name}: {e}")
-        return False
+        return {"valid": "false", "error": str(e) if str(e) else "Failed to resolve MX records"}
 
 
 @app.post("/v1/domains", summary="Claim a new domain")
