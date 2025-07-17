@@ -143,11 +143,11 @@ async def fetch_domains(
         )
 
 @app.delete("/v1/domains/drop")
-async def delete_all_domains():
+def delete_all_domains():
     try:
-        keys = [key async for key in redis_domains.scan_iter("*")]
+        keys = [key for key in redis_domains.scan_iter("*")]
         if keys:
-            await redis_domains.delete(*keys)
+            redis_domains.delete(*keys)
         return {"message": "All domains deleted successfully."}
     except Exception as e:
         raise HTTPException(
