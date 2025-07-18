@@ -13,7 +13,7 @@ import dns.resolver
 
 
 class DomainClaim(BaseModel):
-    domain: str
+    name: str
     mailbox_ttl: Optional[int] = 3600
 
 app = FastAPI()
@@ -115,7 +115,7 @@ async def claim_domain(
     auth_header: str = Header(None, alias="Authorization")
 ):
     user_id = await get_user_id(auth_header)
-    domain_name = domainClaim.domain.lower()
+    domain_name = domainClaim.name.lower()
     txt_verification = f"minutemail-{random_string(16)}"
 
     domain_key = f"domain:{domain_name}"
