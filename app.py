@@ -139,8 +139,8 @@ async def claim_domain(
 
         pipe = redis_domains.pipeline()
 
-        await pipe.set(domain_key, user_id)
-        await pipe.sadd(user_domains_set_key, json.dumps(claimed_domain))
+        pipe.set(domain_key, user_id)
+        pipe.sadd(user_domains_set_key, json.dumps(claimed_domain))
 
         pipe.execute()
 
@@ -154,7 +154,7 @@ async def claim_domain(
         )
 
 
-@app.get("/v1/domains", response_model=List[DomainClaim], summary="Fetch all domains claimed by the current user")
+@app.get("/v1/domains", summary="Fetch all domains claimed by the current user")
 async def fetch_domains(
     auth_header: str = Header(None, alias="Authorization")
 ):
@@ -168,6 +168,7 @@ async def fetch_domains(
             claimed_domain["mx_valid"] = verify_mx(claimed_domain["name"])
             claimed_domain["txt_valid"] = verify_txt(claimed_domain["name"], claimed_domain["verification"])
             claimed_domains.append(claimed_domain)
+        return claimed_domains
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
