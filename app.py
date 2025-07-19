@@ -94,7 +94,8 @@ def verify_mx(
         return all(mx in valid_mx_records for mx in mx_hosts)
     except Exception as e:
         print(f"Failed to get MX records for {domain_name}: {e}")
-        return {"valid": False, "error": str(e) if str(e) else "Failed to resolve MX records"}
+
+    return False
 
 
 def verify_txt(
