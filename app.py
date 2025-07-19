@@ -6,7 +6,7 @@ import requests
 from fastapi import FastAPI, HTTPException, Header, status
 import redis
 import os
-from typing import List, Optional
+from typing import Optional
 from pydantic import BaseModel
 from jose import jwt, JWTError
 import dns.resolver
@@ -75,9 +75,11 @@ def get_claims(auth_header: str) -> dict:
 
     return claims
 
+
 def random_string(length: int):
     characters = string.ascii_letters + string.digits
     return ''.join(random.choices(characters, k=length))
+
 
 def verify_mx(
     domain: str
@@ -94,6 +96,7 @@ def verify_mx(
         print(f"Failed to get MX records for {domain_name}: {e}")
         return {"valid": False, "error": str(e) if str(e) else "Failed to resolve MX records"}
 
+
 def verify_txt(
         domain: str,
         txt_verification: str,
@@ -108,6 +111,7 @@ def verify_txt(
         print(f"Failed to get TXT records for {domain_name}: {e}")
 
     return False
+
 
 @app.post("/v1/domains", summary="Claim a new domain")
 async def claim_domain(
@@ -187,7 +191,6 @@ async def delete_domain(
     domain_key = f"domain:{domain_name}"
     user_domains_set_key = f"user:{user_id}:domains"
 
-    # Check if the domain exists and if the current user is its owner
     claimed_by_user_id = redis_domains.get(domain_key)
 
     if not claimed_by_user_id:
@@ -203,15 +206,11 @@ async def delete_domain(
         )
 
     try:
-        # Start a Redis pipeline for atomic operations
         pipe = redis_domains.pipeline()
 
-        # 1. Delete the domain's ownership key
-        await pipe.delete(domain_key)
-        # 2. Remove the domain from the user's set of claimed domains
-        await pipe.srem(user_domains_set_key, domain_name)
+        pipe.delete(domain_key)
+        pipe.srem(user_domains_set_key, domain_name)
 
-        # Execute all commands in the pipeline atomically
         pipe.execute()
 
         return {"message": f"Domain '{domain_name}' deleted successfully by user '{user_id}'."}
