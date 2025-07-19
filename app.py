@@ -28,7 +28,7 @@ AUDIENCE = "account"
 JWKS_URL = f"{KEYCLOAK_URL}/realms/{REALM}/protocol/openid-connect/certs"
 ISSUER = f"{KEYCLOAK_URL}/realms/{REALM}"
 
-redis_domains = redis.Redis(host=redis_host, port=redis_port, db=redis_db, decode_responses=True)
+redis_client = redis.Redis(host=redis_host, port=redis_port, db=redis_db, decode_responses=True)
 
 async def get_user_id(auth_header):
     if not auth_header or not auth_header.startswith("Bearer "):
@@ -122,17 +122,7 @@ async def claim_domain(
     domain_name = domainClaim.name.lower()
     txt_verification = f"minutemail-{random_string(16)}"
 
-    domain_key = f"domain:{domain_name}"
-    user_domains_set_key = f"user:{user_id}:domains"
-
-    claimed_by_user_id = redis_domains.get(domain_key)
-
-    if claimed_by_user_id:
-        if claimed_by_user_id == user_id:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=f"Domain '{domain_name}' is already claimed."
-            )
+    domain_key = f"user:{user_id}:domains"
 
     try:
         claimed_domain = {
@@ -141,12 +131,7 @@ async def claim_domain(
             "mailbox_ttl": domainClaim.mailbox_ttl
         }
 
-        pipe = redis_domains.pipeline()
-
-        pipe.set(domain_key, user_id)
-        pipe.sadd(user_domains_set_key, json.dumps(claimed_domain))
-
-        pipe.execute()
+        await redis_client.rpush(domain_key, json.dumps(claimed_domain))
 
         claimed_domain["mx_valid"] = verify_mx(domain_name)
         claimed_domain["txt_valid"] = False
@@ -167,7 +152,7 @@ async def fetch_domains(
 
     try:
         claimed_domains = []
-        for domain in redis_domains.smembers(user_domains_set_key):
+        for domain in redis_client.smembers(user_domains_set_key):
             claimed_domain = json.loads(domain)
             claimed_domain["mx_valid"] = verify_mx(claimed_domain["name"])
             claimed_domain["txt_valid"] = verify_txt(claimed_domain["name"], claimed_domain["verification"])
@@ -186,34 +171,22 @@ async def delete_domain(
     auth_header: str = Header(None, alias="Authorization")
 ):
     user_id = await get_user_id(auth_header)
-    domain_name = domain_name.lower() # Ensure consistency
+    domain_name = domain_name.lower()
 
-    domain_key = f"domain:{domain_name}"
-    user_domains_set_key = f"user:{user_id}:domains"
-
-    claimed_by_user_id = redis_domains.get(domain_key)
-
-    if not claimed_by_user_id:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Domain '{domain_name}' not found or not claimed."
-        )
-
-    if claimed_by_user_id != user_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"You are not authorized to delete domain '{domain_name}' as it is claimed by another user."
-        )
+    domain_key = f"user:{user_id}:domains"
 
     try:
-        pipe = redis_domains.pipeline()
+        raw_list = redis_client.lrange(domain_key, 0, -1)
+        for raw in raw_list:
+            content = json.loads(raw)
+            if content.get("name") == domain_name:
+                redis_client.lrem(domain_key, 1, raw)
+                return {"message": f"Domain '{domain_name}' deleted successfully by user '{user_id}'."}
 
-        pipe.delete(domain_key)
-        pipe.srem(user_domains_set_key, domain_name)
-
-        pipe.execute()
-
-        return {"message": f"Domain '{domain_name}' deleted successfully by user '{user_id}'."}
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Domain '{domain_name}' not found for user '{user_id}'."
+        )
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
