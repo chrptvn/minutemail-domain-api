@@ -166,7 +166,7 @@ async def fetch_domains(
 
     try:
         claimed_domains = []
-        members = await redis_client.smembers(domain_key)
+        members = redis_client.smembers(domain_key)
         for raw in members:
             d = json.loads(raw)
             d["mx_valid"]  = verify_mx(d["name"])
