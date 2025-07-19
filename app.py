@@ -121,21 +121,34 @@ async def claim_domain(
     user_id = await get_user_id(auth_header)
     domain_name = domainClaim.name.lower()
     txt_verification = f"minutemail-{random_string(16)}"
-
     domain_key = f"user:{user_id}:domains"
 
     try:
-        claimed_domain = {
-            "name": domain_name,
+        # Prevent double-claim
+        existing = await redis_client.smembers(domain_key)
+        for raw in existing:
+            if json.loads(raw)["name"] == domain_name:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Domain '{domain_name}' already claimed."
+                )
+
+        claimed = {
+            "name":        domain_name,
             "verification": txt_verification,
             "mailbox_ttl": domainClaim.mailbox_ttl
         }
 
-        await redis_client.rpush(domain_key, json.dumps(claimed_domain))
+        # Store as a Set member
+        await redis_client.sadd(domain_key, json.dumps(claimed))
 
-        claimed_domain["mx_valid"] = verify_mx(domain_name)
-        claimed_domain["txt_valid"] = False
-        return claimed_domain
+        # Add runtime–only fields
+        claimed["mx_valid"]  = verify_mx(domain_name)
+        claimed["txt_valid"] = False
+        return claimed
+
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -148,16 +161,18 @@ async def fetch_domains(
     auth_header: str = Header(None, alias="Authorization")
 ):
     user_id = await get_user_id(auth_header)
-    user_domains_set_key = f"user:{user_id}:domains"
+    domain_key = f"user:{user_id}:domains"
 
     try:
         claimed_domains = []
-        for domain in redis_client.smembers(user_domains_set_key):
-            claimed_domain = json.loads(domain)
-            claimed_domain["mx_valid"] = verify_mx(claimed_domain["name"])
-            claimed_domain["txt_valid"] = verify_txt(claimed_domain["name"], claimed_domain["verification"])
-            claimed_domains.append(claimed_domain)
+        members = await redis_client.smembers(domain_key)
+        for raw in members:
+            d = json.loads(raw)
+            d["mx_valid"]  = verify_mx(d["name"])
+            d["txt_valid"] = verify_txt(d["name"], d["verification"])
+            claimed_domains.append(d)
         return claimed_domains
+
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -172,21 +187,23 @@ async def delete_domain(
 ):
     user_id = await get_user_id(auth_header)
     domain_name = domain_name.lower()
-
-    domain_key = f"user:{user_id}:domains"
+    domain_key  = f"user:{user_id}:domains"
 
     try:
-        raw_list = redis_client.lrange(domain_key, 0, -1)
-        for raw in raw_list:
-            content = json.loads(raw)
-            if content.get("name") == domain_name:
-                redis_client.lrem(domain_key, 1, raw)
-                return {"message": f"Domain '{domain_name}' deleted successfully by user '{user_id}'."}
+        members = await redis_client.smembers(domain_key)
+        for raw in members:
+            d = json.loads(raw)
+            if d["name"] == domain_name:
+                await redis_client.srem(domain_key, raw)
+                return {"message": f"Domain '{domain_name}' deleted successfully."}
 
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Domain '{domain_name}' not found for user '{user_id}'."
+            detail=f"Domain '{domain_name}' not found."
         )
+
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
