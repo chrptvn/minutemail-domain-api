@@ -195,7 +195,7 @@ async def delete_domain(
         for raw in members:
             d = json.loads(raw)
             if d["name"] == domain_name:
-                redis_client.srem(domain_key, raw)
+                await redis_client.srem(domain_key, raw)
                 return {"message": f"Domain '{domain_name}' deleted successfully."}
 
         raise HTTPException(
