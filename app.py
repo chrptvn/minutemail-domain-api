@@ -126,7 +126,7 @@ async def claim_domain(
 
     try:
         # Prevent double-claim
-        existing = await redis_client.smembers(domain_key)
+        existing = redis_client.smembers(domain_key)
         for raw in existing:
             if json.loads(raw)["name"] == domain_name:
                 raise HTTPException(
@@ -141,7 +141,7 @@ async def claim_domain(
         }
 
         # Store as a Set member
-        redis_client.sadd(domain_key, json.dumps(claimed))
+        await redis_client.sadd(domain_key, json.dumps(claimed))
 
         # Add runtime–only fields
         claimed["mx_valid"]  = verify_mx(domain_name)
