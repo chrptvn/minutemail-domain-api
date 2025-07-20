@@ -30,7 +30,8 @@ ISSUER = f"{KEYCLOAK_URL}/realms/{REALM}"
 
 redis_client = redis.Redis(host=redis_host, port=redis_port, db=redis_db, decode_responses=True)
 
-async def get_user_id(auth_header):
+
+def get_user_id(auth_header):
     if not auth_header or not auth_header.startswith("Bearer "):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -46,6 +47,7 @@ async def get_user_id(auth_header):
             detail=f"Invalid token: {str(e)}"
         )
     return user_id
+
 
 
 def get_claims(auth_header: str) -> dict:
@@ -115,11 +117,11 @@ def verify_txt(
 
 
 @app.post("/v1/domains", summary="Claim a new domain")
-async def claim_domain(
+def claim_domain(
     domainClaim: DomainClaim,
     auth_header: str = Header(None, alias="Authorization")
 ):
-    user_id = await get_user_id(auth_header)
+    user_id = get_user_id(auth_header)
     domain_name = domainClaim.name.lower()
     txt_verification = f"minutemail-{random_string(16)}"
     domain_key = f"user:{user_id}:domains"
@@ -158,10 +160,10 @@ async def claim_domain(
 
 
 @app.get("/v1/domains", summary="Fetch all domains claimed by the current user")
-async def fetch_domains(
+def fetch_domains(
     auth_header: str = Header(None, alias="Authorization")
 ):
-    user_id = await get_user_id(auth_header)
+    user_id = get_user_id(auth_header)
     domain_key = f"user:{user_id}:domains"
 
     try:
@@ -182,11 +184,11 @@ async def fetch_domains(
 
 
 @app.delete("/v1/domains/{domain_name}", summary="Delete a claimed domain")
-async def delete_domain(
+def delete_domain(
     domain_name: str,
     auth_header: str = Header(None, alias="Authorization")
 ):
-    user_id = await get_user_id(auth_header)
+    user_id = get_user_id(auth_header)
     domain_name = domain_name.lower()
     domain_key  = f"user:{user_id}:domains"
 
@@ -195,7 +197,7 @@ async def delete_domain(
         for raw in members:
             d = json.loads(raw)
             if d["name"] == domain_name:
-                await redis_client.srem(domain_key, raw)
+                redis_client.srem(domain_key, raw)
                 return {"message": f"Domain '{domain_name}' deleted successfully."}
 
         raise HTTPException(
