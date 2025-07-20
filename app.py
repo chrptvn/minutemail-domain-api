@@ -212,3 +212,26 @@ def delete_domain(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to delete domain due to an internal error: {e}"
         )
+
+
+@app.get("/v1/private/domains/{user_id}", summary="Fetch all domains claimed by the user")
+def fetch_domains_for_user(
+    user_id: str
+):
+    domain_key = f"user:{user_id}:domains"
+
+    try:
+        claimed_domains = []
+        members = redis_client.smembers(domain_key)
+        for raw in members:
+            d = json.loads(raw)
+            d["mx_valid"]  = verify_mx(d["name"])
+            d["txt_valid"] = verify_txt(d["name"], d["verification"])
+            claimed_domains.append(d)
+        return claimed_domains
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch domains due to an internal error: {e}"
+        )
