@@ -141,7 +141,7 @@ async def claim_domain(
         }
 
         # Store as a Set member
-        await redis_client.sadd(domain_key, json.dumps(claimed))
+        redis_client.sadd(domain_key, json.dumps(claimed))
 
         # Add runtime–only fields
         claimed["mx_valid"]  = verify_mx(domain_name)
