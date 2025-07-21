@@ -167,12 +167,7 @@ def fetch_domains(
     domain_key = f"user:{user_id}:domains"
 
     try:
-        claimed_domains = [
-            {
-                "name": "minutemail.co",
-                "mailbox_ttl": 3600
-            }
-        ]
+        claimed_domains = []
 
         members = redis_client.smembers(domain_key)
         for raw in members:
@@ -227,14 +222,19 @@ def fetch_domains_for_user(
     domain_key = f"user:{user_id}:domains"
 
     try:
-        claimed_domains = []
+        allowed_domains = [
+            {
+                "name": "minutemail.co",
+                "mailbox_ttl": 3600
+            }
+        ]
         members = redis_client.smembers(domain_key)
         for raw in members:
             d = json.loads(raw)
             d["mx_valid"]  = verify_mx(d["name"])
             d["txt_valid"] = verify_txt(d["name"], d["verification"])
-            claimed_domains.append(d)
-        return claimed_domains
+            allowed_domains.append(d)
+        return allowed_domains
 
     except Exception as e:
         raise HTTPException(
