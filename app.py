@@ -177,7 +177,7 @@ def fetch_domains(
         members = redis_client.smembers(domain_key)
         for raw in members:
             d = json.loads(raw)
-            d["mx_valid"]  = verify_mx(d["name"])
+            d["mx_valid"] = verify_mx(d["name"])
             d["txt_valid"] = verify_txt(d["name"], d["verification"])
             claimed_domains.append(d)
         return claimed_domains
