@@ -167,7 +167,13 @@ def fetch_domains(
     domain_key = f"user:{user_id}:domains"
 
     try:
-        claimed_domains = []
+        claimed_domains = [
+            {
+                "name": "minutemail.co",
+                "mailbox_ttl": 3600
+            }
+        ]
+
         members = redis_client.smembers(domain_key)
         for raw in members:
             d = json.loads(raw)
